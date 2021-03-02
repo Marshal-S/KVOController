@@ -107,7 +107,7 @@ typedef enum : NSUInteger {
     Class _cls; //创建的新类
     Class _superCls; //原始类
     NSMutableDictionary<NSString *, __LSClassKeyPathInfo *> *_keyPathMap;//每次添加一对setter和getter键值，均指向__LSClassKeyPathInfo对象
-    NSHashTable<_LSClassInfo *> *_hashTable; //该类作为被观察者对象的的弱引用集合，用于判断是否已经设置class了
+    NSHashTable<id> *_hashTable; //该类作为被观察者对象的的弱引用集合，用于判断是否已经设置class了
     dispatch_semaphore_t _semaphore;
 }
 
@@ -155,7 +155,7 @@ typedef enum : NSUInteger {
     [_hashTable addObject:observed]; //加入集合中
     
     //子类重写setter方法实现,并保存keyPath和setter
-    addSetterAndSave(self, info);
+    [self addSetterAndSave:info];
     
     //设置KVOInfo信息对应键值
     NSMutableDictionary *infos = [NSMutableDictionary dictionary];
@@ -186,7 +186,7 @@ typedef enum : NSUInteger {
     __LSClassKeyPathInfo *keyPathInfo = [_keyPathMap objectForKey:info->_keyPath];
     if (!keyPathInfo) {
         //子类重写setter方法实现
-        addSetterAndSave(self, info);
+        [self addSetterAndSave:info];
     }
     //设置classInfo基本信息
     
@@ -247,7 +247,7 @@ static void ls_dealloc(id self, SEL _cmd) {
 }
 
 #pragma mark --重写子类NSNotifying_的setter方法
-static __inline__ __attribute__((always_inline)) void addSetterAndSave(_LSClassInfo *classInfo, _LSKVOInfo *info) {
+- (void)addSetterAndSave:(_LSKVOInfo *)info {
     NSString *setter = [NSString stringWithFormat:@"set%@%@:",[[info->_keyPath substringToIndex:1] uppercaseString], [info->_keyPath substringFromIndex:1]];
     __LSClassKeyPathInfo *keyPathInfo = [__LSClassKeyPathInfo alloc];
     keyPathInfo->_setter = setter;
@@ -255,15 +255,15 @@ static __inline__ __attribute__((always_inline)) void addSetterAndSave(_LSClassI
     
     //没有加入key的情况加入key
     SEL sel = NSSelectorFromString(setter);
-    const char *encoding = method_getTypeEncoding(class_getInstanceMethod(classInfo->_superCls, sel));
+    const char *encoding = method_getTypeEncoding(class_getInstanceMethod(_superCls, sel));
     IMP imp = getTypeEncodingImp(encoding, &(keyPathInfo->_type));
     if (!imp) return;
     
-    class_addMethod(classInfo->_cls, sel, imp, encoding);
+    class_addMethod(_cls, sel, imp, encoding);
 
     //保存对应的键值对，方便获取
-    [classInfo->_keyPathMap setObject:keyPathInfo forKey:info->_keyPath];
-    [classInfo->_keyPathMap setObject:keyPathInfo forKey:setter];
+    [_keyPathMap setObject:keyPathInfo forKey:info->_keyPath];
+    [_keyPathMap setObject:keyPathInfo forKey:setter];
 }
 
 #pragma mark --获取setter参数枚举值
